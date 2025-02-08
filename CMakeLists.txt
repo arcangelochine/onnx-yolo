@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Dependencies
 find_package(OpenCV REQUIRED)
+find_package(CUDA QUIET)
 
 # Import ONNXRuntime
 set(ONNXRuntime_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/external/onnxruntime)
@@ -20,6 +21,22 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")  # macOS
     set(ONNXRuntime_LIBS "${ONNXRuntime_ROOT}/lib/libonnxruntime.dylib")
 else()
     message(FATAL_ERROR "Unsupported OS: ${CMAKE_SYSTEM_NAME}")
+endif()
+
+# Detect CUDA support
+if(CUDA_FOUND)
+    add_definitions(-DHAS_CUDA)
+endif()
+
+# Detect CoreML (macOS-specific)
+if(APPLE)
+    include(CheckIncludeFileCXX)
+
+    check_include_file_cxx("coreml_provider_factory.h" HAS_COREML_HEADERS)
+
+    if(HAS_COREML_HEADERS)
+        add_definitions(-DHAS_COREML)
+    endif()
 endif()
 
 # Add sources
