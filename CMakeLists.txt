@@ -6,36 +6,45 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Dependencies
 find_package(OpenCV REQUIRED)
-find_package(CUDA QUIET)
+find_package(CUDAToolkit QUIET)  # CUDA support (if available)
 
 # Import ONNXRuntime
 set(ONNXRuntime_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/external/onnxruntime)
 set(ONNXRuntime_INCLUDE_DIRS "${ONNXRuntime_ROOT}/include")
+set(ONNXRuntime_LIB_DIR "${ONNXRuntime_ROOT}/lib")
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(ONNXRuntime_LIBS "${ONNXRuntime_ROOT}/lib/onnxruntime.lib")
-    set(ONNXRuntime_DLL "${ONNXRuntime_ROOT}/lib/onnxruntime.dll")
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(ONNXRuntime_LIBS "${ONNXRuntime_ROOT}/lib/libonnxruntime.so")
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")  # macOS
-    set(ONNXRuntime_LIBS "${ONNXRuntime_ROOT}/lib/libonnxruntime.dylib")
+# Detect OS and set ONNXRuntime library path accordingly
+if(WIN32)
+    set(ONNXRuntime_LIBS "${ONNXRuntime_LIB_DIR}/onnxruntime.lib")
+    set(ONNXRuntime_DLL "${ONNXRuntime_LIB_DIR}/onnxruntime.dll")
+elseif(UNIX AND NOT APPLE)  # Linux
+    set(ONNXRuntime_LIBS "${ONNXRuntime_LIB_DIR}/libonnxruntime.so")
+elseif(APPLE)  # macOS
+    set(ONNXRuntime_LIBS "${ONNXRuntime_LIB_DIR}/libonnxruntime.dylib")
 else()
     message(FATAL_ERROR "Unsupported OS: ${CMAKE_SYSTEM_NAME}")
 endif()
 
 # Detect CUDA support
-if(CUDA_FOUND)
+if(CUDAToolkit_FOUND)
+    message(STATUS "CUDA found: Enabling CUDA support")
     add_definitions(-DHAS_CUDA)
 endif()
 
-# Detect CoreML (macOS-specific)
+# Detect CoreML support on macOS
 if(APPLE)
-    include(CheckIncludeFileCXX)
-
-    check_include_file_cxx("coreml_provider_factory.h" HAS_COREML_HEADERS)
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_INCLUDES "${ONNXRuntime_INCLUDE_DIRS}")
+    check_cxx_source_compiles("
+        #include <coreml_provider_factory.h>
+        int main() { return 0; }
+    " HAS_COREML_HEADERS)
 
     if(HAS_COREML_HEADERS)
+        message(STATUS "CoreML headers found: Enabling CoreML support")
         add_definitions(-DHAS_COREML)
+    else()
+        message(WARNING "CoreML headers not found, disabling CoreML support.")
     endif()
 endif()
 
@@ -47,7 +56,7 @@ add_library(onnx_yolo SHARED ${SOURCES})
 
 target_include_directories(onnx_yolo PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>  # For installation
+  $<INSTALL_INTERFACE:include>
   ${OpenCV_INCLUDE_DIRS}
   $<BUILD_INTERFACE:${ONNXRuntime_INCLUDE_DIRS}>
 )
@@ -58,7 +67,7 @@ target_link_libraries(onnx_yolo PRIVATE
   ${ONNXRuntime_LIBS}
 )
 
-# RPATH settings
+# RPATH settings for shared libraries
 set_target_properties(onnx_yolo PROPERTIES
     CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE
     CMAKE_INSTALL_RPATH "\$ORIGIN/../lib"
@@ -84,4 +93,5 @@ if(WIN32)
     install(FILES ${ONNXRuntime_DLL} DESTINATION bin)
 endif()
 
+# Add example programs
 add_subdirectory(examples)
