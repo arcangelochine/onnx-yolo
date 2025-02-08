@@ -1,0 +1,11 @@
+build/
+external/
+
+.vscode
+
+*.pt
+*.onnx
+*.jpg
+*.pt
+
+.DS_Store
